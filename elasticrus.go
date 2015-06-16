@@ -1,0 +1,74 @@
+package elasticrus
+
+import (
+	"fmt"
+	"github.com/Sirupsen/logrus"
+	elastigo "github.com/mattbaird/elastigo/lib"
+	"os"
+)
+
+const (
+	VERSION = "1.0.0"
+)
+
+type ElasticrusHook struct {
+	host            string
+	port            string
+	baseIndex       string
+	indexType       string
+	timestampFormat string
+	esCon           *elastigo.Conn
+}
+
+func NewElasticHook(host, port, baseIndex, indexType, timestampFormat string) *ElasticrusHook {
+	hook := &ElasticrusHook{
+		host:            host,
+		port:            port,
+		baseIndex:       baseIndex,
+		indexType:       indexType,
+		timestampFormat: timestampFormat,
+	}
+
+	return hook
+}
+
+func (hook *ElasticrusHook) Levels() []logrus.Level {
+	return []logrus.Level{
+		logrus.PanicLevel,
+		logrus.FatalLevel,
+		logrus.ErrorLevel,
+		logrus.WarnLevel,
+		logrus.InfoLevel,
+		logrus.DebugLevel,
+	}
+}
+
+func (hook *ElasticrusHook) Fire(sourceEntry *logrus.Entry) error {
+	hook.esCon = elastigo.NewConn()
+	defer hook.esCon.Close()
+
+	hook.esCon.Domain = hook.host
+	hook.esCon.Port = hook.port
+
+	transLog := &logrus.Logger{
+		Formatter: &logrus.JSONFormatter{
+			TimestampFormat: hook.timestampFormat,
+		}}
+
+	transEntry := logrus.NewEntry(transLog)
+	transEntry.Data = sourceEntry.Data
+	transEntry.Time = sourceEntry.Time
+	transEntry.Level = sourceEntry.Level
+	transEntry.Message = sourceEntry.Message
+
+	logMessage, err := transEntry.String()
+
+	_, err = hook.esCon.Index(hook.baseIndex, hook.indexType, "", nil, string(logMessage))
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to read entry, %v", err)
+		return err
+	}
+
+	return err
+}
