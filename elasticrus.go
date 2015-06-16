@@ -5,6 +5,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	elastigo "github.com/mattbaird/elastigo/lib"
 	"os"
+	"time"
 )
 
 const (
@@ -63,7 +64,7 @@ func (hook *ElasticrusHook) Fire(sourceEntry *logrus.Entry) error {
 
 	logMessage, err := transEntry.String()
 
-	_, err = hook.esCon.Index(hook.baseIndex, hook.indexType, "", nil, string(logMessage))
+	_, err = hook.esCon.Index(hook.getIndexWithDate(), hook.indexType, "", nil, string(logMessage))
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to read entry, %v", err)
@@ -71,4 +72,9 @@ func (hook *ElasticrusHook) Fire(sourceEntry *logrus.Entry) error {
 	}
 
 	return err
+}
+
+func (hook *ElasticrusHook) getIndexWithDate() string {
+	currentDate := time.Now().Format("2006.01.02")
+	return hook.baseIndex + "-" + currentDate
 }
